@@ -37,11 +37,13 @@ if (notesFile) notes = fs.readFileSync(notesFile, 'utf8')
 
 // Primary installer per platform (nsis exe / dmg / AppImage). zip & deb are
 // secondary and not part of the auto-update flow.
+// electron-builder's ${arch} differs per target: win-x64 / mac-arm64 / linux-x86_64 —
+// accept the common aliases so renames don't silently drop a platform again.
 const wanted = [
-  { re: /^GitHub-Manager-(.+)-win-x64\.exe$/, key: 'win-x64' },
-  { re: /^GitHub-Manager-(.+)-mac-x64\.dmg$/, key: 'mac-x64' },
+  { re: /^GitHub-Manager-(.+)-win-(x64|amd64)\.exe$/, key: 'win-x64' },
+  { re: /^GitHub-Manager-(.+)-mac-(x64|amd64)\.dmg$/, key: 'mac-x64' },
   { re: /^GitHub-Manager-(.+)-mac-arm64\.dmg$/, key: 'mac-arm64' },
-  { re: /^GitHub-Manager-(.+)-linux-x64\.AppImage$/, key: 'linux-x64' }
+  { re: /^GitHub-Manager-(.+)-linux-(x64|x86_64|amd64)\.AppImage$/, key: 'linux-x64' }
 ]
 
 const files = fs.readdirSync(dir)
