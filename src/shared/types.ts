@@ -119,3 +119,32 @@ export interface DeviceLoginUpdate {
   verificationUri?: string
   message?: string
 }
+
+// --- app self-update (last.json published alongside each GitHub release) ---
+
+export interface UpdateAsset {
+  url: string
+  size: number
+  sha512: string // hex
+}
+
+export interface UpdateManifest {
+  version: string
+  channel: 'stable' | 'rolling'
+  pubDate: string
+  notes: string
+  releaseUrl: string
+  platforms: Record<string, UpdateAsset> // keys: win-x64 | mac-x64 | mac-arm64 | linux-x64
+}
+
+export interface UpdateInfo {
+  current: string
+  latest: string
+  channel: 'stable' | 'rolling'
+  notes: string
+  releaseUrl: string
+  downloadUrl: string
+  sha512: string
+  size: number
+  fileName: string
+}

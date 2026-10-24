@@ -10,6 +10,27 @@ export const accountFilter = ref<string>('') // '' = all
 export const searchQuery = ref('')
 export const addDialogOpen = ref(false)
 export const settingsOpen = ref(false)
+
+// --- sidebar visibility ---
+export const sidebarOpen = ref(true) // shown inline (wide) or as drawer (narrow)
+export const uiNarrow = ref(false) // window width below NARROW_THRESHOLD_PX
+const manualCollapsed = ref(false) // user explicitly collapsed in wide mode
+
+export const NARROW_THRESHOLD_PX = 640
+
+export function setSidebarOpen(open: boolean): void {
+  sidebarOpen.value = open
+  manualCollapsed.value = !open
+}
+
+// Called when the window crosses the narrow threshold: auto-hide when going
+// narrow, auto-restore when widening — unless the user collapsed it manually.
+export function applyNarrow(narrow: boolean): void {
+  if (narrow === uiNarrow.value) return
+  uiNarrow.value = narrow
+  if (narrow) sidebarOpen.value = false
+  else if (!manualCollapsed.value) sidebarOpen.value = true
+}
 export const mcp = reactive<McpStatus & { loading: boolean }>({
   enabled: false,
   running: false,
@@ -19,6 +40,22 @@ export const mcp = reactive<McpStatus & { loading: boolean }>({
   loading: false
 })
 export const appInfo = reactive({ version: '', platform: '', electron: '' })
+
+// --- app update ---
+export type UpdateUiStatus = 'idle' | 'available' | 'downloading' | 'downloaded' | 'error'
+export const update = reactive<{
+  status: UpdateUiStatus
+  current: string
+  latest: import('./api').UpdateInfo | null
+  percent: number
+  error: string | null
+}>({
+  status: 'idle',
+  current: '',
+  latest: null,
+  percent: 0,
+  error: null
+})
 
 export async function loadAccounts(): Promise<void> {
   accounts.value = await api.getAccounts()

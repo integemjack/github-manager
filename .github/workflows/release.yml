@@ -130,6 +130,27 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Generate last.json (self-update manifest)
+        run: |
+          set -euo pipefail
+          VERSION="$(cat dist/VERSION.txt | tr -d '[:space:]')"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+            CHANNEL="stable"
+            NOTES="GitHub Manager $TAG"
+          else
+            TAG="rolling"
+            CHANNEL="rolling"
+            SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
+            NOTES="Rolling build v$VERSION ($SHA)"
+          fi
+          node tools/gen-last-json.mjs \
+            --dir dist \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$TAG" \
+            --channel "$CHANNEL" \
+            --notes "$NOTES"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

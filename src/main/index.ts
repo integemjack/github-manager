@@ -28,6 +28,7 @@ import {
   startMcpStdio,
   stopMcpHttp
 } from './mcp'
+import { checkForUpdates, downloadUpdate, installUpdate, startAutoUpdateCheck } from './update'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -75,6 +76,7 @@ async function mainAsync(): Promise<void> {
   }
 
   createWindow()
+  startAutoUpdateCheck()
 
   app.on('second-instance', () => {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
@@ -98,8 +100,8 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
-    minWidth: 940,
-    minHeight: 600,
+    minWidth: 300,
+    minHeight: 420,
     backgroundColor: '#0d1117',
     title: 'GitHub Manager',
     autoHideMenuBar: true,
@@ -298,3 +300,11 @@ ipcMain.handle('app-info', () => ({
   platform: process.platform,
   electron: process.versions.electron
 }))
+
+// ---------------- Self-update (last.json in GitHub releases) ----------------
+
+ipcMain.handle('update:check', () => checkForUpdates())
+ipcMain.handle('update:download', (e) => downloadUpdate(e.sender))
+ipcMain.handle('update:install', () => {
+  installUpdate()
+})

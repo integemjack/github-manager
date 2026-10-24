@@ -82,7 +82,7 @@ function onKey(e: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="overlay" v-if="addDialogOpen" @click.self="close">
+  <div class="overlay" v-if="addDialogOpen">
     <div class="dialog">
       <div class="dialog-head">
         <h3>添加 GitHub 账号</h3>

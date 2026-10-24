@@ -1,4 +1,4 @@
-import type { Account, DeviceLoginUpdate, McpStatus, ReleaseInfo, Repo, RunJob, WorkflowRun } from '../../shared/types'
+import type { Account, DeviceLoginUpdate, McpStatus, ReleaseInfo, Repo, RunJob, UpdateInfo, WorkflowRun } from '../../shared/types'
 
 export const api = window.gm
 export type {
@@ -8,5 +8,6 @@ export type {
   ReleaseInfo,
   Repo,
   RunJob,
+  UpdateInfo,
   WorkflowRun
 }

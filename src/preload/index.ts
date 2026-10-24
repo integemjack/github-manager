@@ -6,6 +6,7 @@ import type {
   ReleaseInfo,
   Repo,
   RunJob,
+  UpdateInfo,
   WorkflowRun
 } from '../shared/types'
 
@@ -45,7 +46,32 @@ const api = {
   // misc
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open-external', url),
   appInfo: (): Promise<{ version: string; platform: string; electron: string }> =>
-    ipcRenderer.invoke('app-info')
+    ipcRenderer.invoke('app-info'),
+
+  // self-update
+  checkUpdate: (): Promise<UpdateInfo | null> => ipcRenderer.invoke('update:check'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('update:download'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('update:install'),
+  onUpdateAvailable: (cb: (info: UpdateInfo) => void): (() => void) => {
+    const listener = (_e: unknown, payload: UpdateInfo) => cb(payload)
+    ipcRenderer.on('update:available', listener)
+    return () => ipcRenderer.removeListener('update:available', listener)
+  },
+  onUpdateProgress: (cb: (p: { percent: number }) => void): (() => void) => {
+    const listener = (_e: unknown, payload: { percent: number }) => cb(payload)
+    ipcRenderer.on('update:progress', listener)
+    return () => ipcRenderer.removeListener('update:progress', listener)
+  },
+  onUpdateDownloaded: (cb: (p: { path: string }) => void): (() => void) => {
+    const listener = (_e: unknown, payload: { path: string }) => cb(payload)
+    ipcRenderer.on('update:downloaded', listener)
+    return () => ipcRenderer.removeListener('update:downloaded', listener)
+  },
+  onUpdateError: (cb: (p: { message: string }) => void): (() => void) => {
+    const listener = (_e: unknown, payload: { message: string }) => cb(payload)
+    ipcRenderer.on('update:error', listener)
+    return () => ipcRenderer.removeListener('update:error', listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('gm', api)

@@ -12,6 +12,7 @@
 - **Actions 构建详情** —— 点开仓库查看运行历史；每次运行的 job、每个 step 的实时进度（8 秒轮询）、运行日志（末尾 200 KB）
 - **Release 管理** —— 查看仓库 Release 列表（Latest / 预发布 / 草稿标记）、Release 说明（Markdown 渲染）、附件下载
 - **MCP 服务器** —— 内置 Model Context Protocol 服务（Streamable HTTP + stdio 桥接），AI 助手可查询你的账号、仓库、Actions 与 Release
+- **自动更新** —— 启动时检查新版本（含 Rolling 预发布），顶部提示条内下载、校验 sha512 并一键重启安装（Windows）；其他平台跳转下载页
 
 ## MCP
 
@@ -60,6 +61,7 @@ npm run dist:all   # 全平台打包
 
 - 推送到 `main` → GitHub Actions 自动构建 Windows / Linux / macOS 安装包并更新到 [Rolling Release](../../releases/tag/rolling)
 - 推送 `v*` 标签 → 发布正式 Release
+- 每个 Release 附带 `last.json`（自更新清单：版本号、各平台安装包地址与 sha512，由 `tools/gen-last-json.mjs` 生成）；应用启动时据此检查更新
 - 若本次推送忘记升版本号，CI 会自动 patch +1 并推回 main（版本号重复会干扰下游更新判断）
 
 ## 安全说明
