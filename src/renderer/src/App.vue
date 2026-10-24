@@ -41,8 +41,9 @@ onMounted(async () => {
 
   await initApp()
   // Auto refresh repo list (with Actions status) every 60s while on the list view
+  // (also runs when the window is unfocused/minimized)
   timer = window.setInterval(() => {
-    if (!selectedRepo.value && accounts.value.length > 0 && document.hasFocus()) {
+    if (!selectedRepo.value && accounts.value.length > 0) {
       void refreshRepos()
     }
   }, 60_000)
