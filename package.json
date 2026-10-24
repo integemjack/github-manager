@@ -2,8 +2,11 @@
   "name": "github-manager",
   "version": "0.1.0",
   "description": "Multi-account GitHub manager desktop app: repos, Actions, Releases & built-in MCP server",
+  "author": {
+    "name": "integemjack",
+    "email": "integemjack@users.noreply.github.com"
+  },
   "main": "./out/main/index.js",
-  "author": "integemjack",
   "license": "MIT",
   "private": false,
   "repository": {
