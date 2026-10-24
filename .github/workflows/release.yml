@@ -111,7 +111,13 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [build]
+    needs: [bump-version, build]
+    # Explicit result checks — without always(), a skipped bump-version (tag
+    # pushes) would propagate "skipped" through build and silently skip this job.
+    if: >-
+      always() && !cancelled() && !failure() &&
+      (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped') &&
+      needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
