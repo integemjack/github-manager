@@ -148,6 +148,14 @@ function stopTimers(): void {
   runsTimer = jobsTimer = undefined
 }
 
+// The runs interval depends on hasActive (8s while something is queued or
+// running, else 20s), which is only evaluated when startTimers() runs. Watch
+// it so e.g. triggering a new workflow from outside switches polling to the
+// fast cadence without leaving and re-entering the repo.
+watch(hasActive, () => {
+  if (runsTimer || jobsTimer) startTimers()
+})
+
 onUnmounted(stopTimers)
 </script>
 
