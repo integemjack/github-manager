@@ -101,7 +101,7 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
-    minWidth: 300,
+    minWidth: 600,
     minHeight: 420,
     backgroundColor: '#0d1117',
     title: 'GitHub Manager',
