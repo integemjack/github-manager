@@ -34,7 +34,9 @@ onMounted(() => {
       update.error = null
     }),
     api.onUpdateProgress((p) => {
+      // Auto-downloads start without a click; switch to the progress view
       update.percent = p.percent
+      if (update.status === 'available') update.status = 'downloading'
     }),
     api.onUpdateDownloaded(() => {
       update.status = 'downloaded'
