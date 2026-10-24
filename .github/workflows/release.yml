@@ -75,7 +75,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          # Pin to the exact commit bump-version decided on (tag runs use the
+          # tagged commit). Resolving github.ref here instead would race with
+          # concurrent pushes and package a commit that is not this run's,
+          # producing artifacts whose version doesn't match the release.
+          ref: ${{ needs.bump-version.outputs.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -129,6 +133,34 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      - name: Verify version alignment
+        run: |
+          set -euo pipefail
+          VERSION="$(cat dist/VERSION.txt | tr -d '[:space:]')"
+          echo "built version: $VERSION"
+          # artifacts must carry the version the build actually staged
+          if ! ls dist | grep -q "GitHub-Manager-$VERSION-"; then
+            echo "::error::no artifacts named GitHub-Manager-$VERSION-* in dist"
+            ls dist
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # a tag must point at a commit whose package.json matches the tag,
+            # otherwise the "stable" release would ship a different version
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$VERSION" != "$TAG_VERSION" ]; then
+              echo "::error::tag $GITHUB_REF_NAME points to a commit that packages $VERSION — re-tag on a commit whose package.json is $TAG_VERSION"
+              exit 1
+            fi
+          elif [ -n "${{ needs.bump-version.outputs.version }}" ]; then
+            # main pushes: what we built must equal what bump-version decided
+            DECIDED="${{ needs.bump-version.outputs.version }}"
+            if [ "$VERSION" != "$DECIDED" ]; then
+              echo "::error::artifacts built at $VERSION but bump-version decided $DECIDED"
+              exit 1
+            fi
+          fi
 
       - name: Generate last.json (self-update manifest)
         run: |
