@@ -54,8 +54,11 @@ api.onAssetError((e) => {
 import { onUnmounted, onMounted, ref, computed } from 'vue'
 import type { ReleaseAsset, ReleaseInfo, Repo } from '../api'
 import { fmtBytes, fmtDateTime, relativeTime, renderMarkdown } from '../utils'
+import { useColResize } from '../useColResize'
 
 const props = defineProps<{ repo: Repo }>()
+
+const { width: relWidth, resizing: relResizing, onResizeStart: onRelResizeStart } = useColResize('gm.relColWidth', 360)
 
 const releases = ref<ReleaseInfo[]>([])
 const loading = ref(false)
@@ -167,7 +170,7 @@ onUnmounted(() => {
 
 <template>
   <div class="rel-panel">
-    <div class="rel-col">
+    <div class="rel-col" :style="{ width: relWidth + 'px' }">
       <div class="col-head">
         Releases
         <span class="spin" v-if="loading" style="margin-left: 6px"></span>
@@ -194,6 +197,13 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <div
+      class="col-resizer"
+      :class="{ active: relResizing }"
+      @pointerdown="onRelResizeStart"
+      title="拖拽调节列表宽度"
+    ></div>
 
     <div class="rel-detail" v-if="selected">
       <div class="rd-head">
@@ -258,11 +268,31 @@ onUnmounted(() => {
 <style scoped>
 .rel-panel { display: flex; height: 100%; overflow: hidden; }
 .rel-col {
-  width: 360px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border-soft);
   overflow-y: auto;
   padding: 8px;
+}
+.col-resizer {
+  flex-shrink: 0;
+  width: 6px;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+.col-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2.5px;
+  width: 1px;
+  background: var(--border-soft);
+}
+.col-resizer:hover::before,
+.col-resizer.active::before {
+  left: 2px;
+  width: 2px;
+  background: var(--accent);
 }
 .col-head { font-size: 12px; color: var(--fg-dim); padding: 4px 8px 8px; display: flex; align-items: center; }
 .error-banner {

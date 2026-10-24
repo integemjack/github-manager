@@ -2,8 +2,11 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { api, type Repo, type RunJob, type WorkflowRun } from '../api'
 import { fmtDateTime, fmtDuration, relativeTime } from '../utils'
+import { useColResize } from '../useColResize'
 
 const props = defineProps<{ repo: Repo }>()
+
+const { width: runsWidth, resizing: runsResizing, onResizeStart: onRunsResizeStart } = useColResize('gm.runsColWidth', 380)
 
 const runs = ref<WorkflowRun[]>([])
 const loading = ref(false)
@@ -161,7 +164,7 @@ onUnmounted(stopTimers)
 
 <template>
   <div class="run-panel">
-    <div class="runs-col">
+    <div class="runs-col" :style="{ width: runsWidth + 'px' }">
       <div class="col-head">
         工作流运行
         <span class="spin" v-if="loading" style="margin-left: 6px"></span>
@@ -189,6 +192,13 @@ onUnmounted(stopTimers)
         </div>
       </div>
     </div>
+
+    <div
+      class="col-resizer"
+      :class="{ active: runsResizing }"
+      @pointerdown="onRunsResizeStart"
+      title="拖拽调节列表宽度"
+    ></div>
 
     <div class="detail-col" v-if="selected">
       <div class="run-head">
@@ -260,11 +270,31 @@ onUnmounted(stopTimers)
   overflow: hidden;
 }
 .runs-col {
-  width: 380px;
   flex-shrink: 0;
-  border-right: 1px solid var(--border-soft);
   overflow-y: auto;
   padding: 8px;
+}
+.col-resizer {
+  flex-shrink: 0;
+  width: 6px;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+.col-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2.5px;
+  width: 1px;
+  background: var(--border-soft);
+}
+.col-resizer:hover::before,
+.col-resizer.active::before {
+  left: 2px;
+  width: 2px;
+  background: var(--accent);
 }
 .col-head {
   font-size: 12px;
