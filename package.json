@@ -1,6 +1,6 @@
 {
   "name": "github-manager",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Multi-account GitHub manager desktop app: repos, Actions, Releases & built-in MCP server",
   "author": {
     "name": "integemjack",
