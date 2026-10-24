@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
   Account,
+  AssetDownloadDone,
+  AssetDownloadError,
+  AssetDownloadProgress,
+  AssetDownloadRequest,
   DeviceLoginUpdate,
   McpStatus,
   ReleaseInfo,
@@ -38,6 +42,29 @@ const api = {
     ipcRenderer.invoke('releases:list', fullName, accountId),
   getReleaseByTag: (fullName: string, tag: string, accountId?: string): Promise<ReleaseInfo> =>
     ipcRenderer.invoke('releases:byTag', fullName, tag, accountId),
+
+  // release asset downloads (saved to the OS downloads folder)
+  downloadAsset: (req: AssetDownloadRequest): Promise<void> => ipcRenderer.invoke('asset:download', req),
+  cancelAssetDownload: (assetId: number): Promise<void> => ipcRenderer.invoke('asset:cancel', assetId),
+  checkAssetsSaved: (names: string[]): Promise<Record<string, string>> =>
+    ipcRenderer.invoke('asset:checkSaved', names),
+  openAssetFile: (path: string): Promise<void> => ipcRenderer.invoke('asset:open', path),
+  deleteAssetFile: (path: string): Promise<void> => ipcRenderer.invoke('asset:delete', path),
+  onAssetProgress: (cb: (p: AssetDownloadProgress) => void): (() => void) => {
+    const listener = (_e: unknown, payload: AssetDownloadProgress) => cb(payload)
+    ipcRenderer.on('asset:progress', listener)
+    return () => ipcRenderer.removeListener('asset:progress', listener)
+  },
+  onAssetDone: (cb: (p: AssetDownloadDone) => void): (() => void) => {
+    const listener = (_e: unknown, payload: AssetDownloadDone) => cb(payload)
+    ipcRenderer.on('asset:done', listener)
+    return () => ipcRenderer.removeListener('asset:done', listener)
+  },
+  onAssetError: (cb: (p: AssetDownloadError) => void): (() => void) => {
+    const listener = (_e: unknown, payload: AssetDownloadError) => cb(payload)
+    ipcRenderer.on('asset:error', listener)
+    return () => ipcRenderer.removeListener('asset:error', listener)
+  },
 
   // mcp
   mcpStatus: (): Promise<McpStatus> => ipcRenderer.invoke('mcp:status'),

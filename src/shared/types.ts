@@ -100,6 +100,33 @@ export interface ReleaseInfo {
   assets: ReleaseAsset[]
 }
 
+// --- release asset downloads (in-app, to the OS downloads folder) ---
+
+export interface AssetDownloadRequest {
+  assetId: number
+  name: string
+  url: string // browser_download_url of the asset
+  accountId?: string
+}
+
+export interface AssetDownloadProgress {
+  assetId: number
+  received: number
+  total: number // 0 when content-length is unknown
+}
+
+export interface AssetDownloadDone {
+  assetId: number
+  path: string // where the file was saved
+  size: number
+}
+
+export interface AssetDownloadError {
+  assetId: number
+  message: string
+  cancelled: boolean
+}
+
 export interface McpToolInfo {
   name: string
   description: string

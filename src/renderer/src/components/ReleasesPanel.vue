@@ -1,6 +1,58 @@
+<script lang="ts">
+// Module-scope asset-download state: survives component re-mounts (switching
+// repos / releases); downloads keep running in the main process regardless of
+// this view, and these event subscriptions live for the whole app lifetime.
+import { reactive } from 'vue'
+import { api } from '../api'
+
+interface DlState {
+  status: 'downloading' | 'done' | 'error'
+  percent: number
+  received: number
+  total: number // 0 when unknown
+  speed: number // bytes/s
+  path?: string
+  error?: string
+}
+
+const dlStates = reactive(new Map<number, DlState>())
+const speedTrack = new Map<number, { t: number; received: number }>()
+
+api.onAssetProgress((p) => {
+  const s = dlStates.get(p.assetId)
+  if (!s || s.status !== 'downloading') return
+  const now = Date.now()
+  const prev = speedTrack.get(p.assetId)
+  let speed = 0
+  if (prev && now > prev.t) {
+    speed = Math.max(0, (p.received - prev.received) / ((now - prev.t) / 1000))
+  }
+  speedTrack.set(p.assetId, { t: now, received: p.received })
+  s.received = p.received
+  if (p.total > 0) s.total = p.total
+  s.percent = s.total > 0 ? Math.min(100, Math.floor((p.received / s.total) * 100)) : 0
+  s.speed = speed
+})
+api.onAssetDone((d) => {
+  speedTrack.delete(d.assetId)
+  dlStates.set(d.assetId, {
+    status: 'done', percent: 100, received: d.size, total: d.size, speed: 0, path: d.path
+  })
+})
+api.onAssetError((e) => {
+  speedTrack.delete(e.assetId)
+  if (e.cancelled) dlStates.delete(e.assetId)
+  else {
+    dlStates.set(e.assetId, {
+      status: 'error', percent: 0, received: 0, total: 0, speed: 0, error: e.message
+    })
+  }
+})
+</script>
+
 <script setup lang="ts">
-import { onUnmounted, onMounted, ref } from 'vue'
-import { api, type ReleaseInfo, type Repo } from '../api'
+import { onUnmounted, onMounted, ref, computed } from 'vue'
+import type { ReleaseAsset, ReleaseInfo, Repo } from '../api'
 import { fmtBytes, fmtDateTime, relativeTime, renderMarkdown } from '../utils'
 
 const props = defineProps<{ repo: Repo }>()
@@ -11,6 +63,76 @@ const error = ref<string | null>(null)
 const selected = ref<ReleaseInfo | null>(null)
 const selectedHtml = ref('')
 let timer: number | undefined
+
+const assetVms = computed(() =>
+  (selected.value?.assets ?? []).map((a) => ({ a, st: dlStates.get(a.id) }))
+)
+
+function fmtSpeed(bps: number): string {
+  return bps > 0 ? `${fmtBytes(bps)}/s` : ''
+}
+
+function clickAsset(a: ReleaseAsset): void {
+  const s = dlStates.get(a.id)
+  if (s?.status === 'downloading') return
+  if (s?.status === 'done' && s.path) {
+    void api.openAssetFile(s.path).catch((err: any) => {
+      s.error = err?.message ?? String(err)
+      s.status = 'error'
+    })
+    return
+  }
+  dlStates.set(a.id, { status: 'downloading', percent: 0, received: 0, total: a.size, speed: 0 })
+  api
+    .downloadAsset({ assetId: a.id, name: a.name, url: a.downloadUrl, accountId: props.repo.accountId })
+    .catch((err: any) =>
+      dlStates.set(a.id, {
+        status: 'error', percent: 0, received: 0, total: 0, speed: 0, error: err?.message ?? String(err)
+      })
+    )
+}
+
+function cancelAsset(a: ReleaseAsset): void {
+  void api.cancelAssetDownload(a.id)
+}
+
+function openAsset(s: DlState): void {
+  if (!s.path) return
+  void api.openAssetFile(s.path).catch((err: any) => {
+    s.error = err?.message ?? String(err)
+    s.status = 'error'
+  })
+}
+
+async function deleteAsset(a: ReleaseAsset, s: DlState): Promise<void> {
+  if (!s.path) return
+  try {
+    await api.deleteAssetFile(s.path)
+    dlStates.delete(a.id)
+  } catch (err: any) {
+    s.error = err?.message ?? String(err)
+    s.status = 'error'
+  }
+}
+
+/** Mark assets whose file already sits in the downloads folder as done. */
+async function checkSaved(list: ReleaseAsset[]): Promise<void> {
+  if (list.length === 0) return
+  try {
+    const found = await api.checkAssetsSaved(list.map((a) => a.name))
+    for (const a of list) {
+      const p = found[a.name]
+      const s = dlStates.get(a.id)
+      if (p && (!s || s.status === 'error')) {
+        dlStates.set(a.id, {
+          status: 'done', percent: 100, received: a.size, total: a.size, speed: 0, path: p
+        })
+      }
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
 
 async function load(): Promise<void> {
   try {
@@ -26,6 +148,7 @@ async function load(): Promise<void> {
 function select(r: ReleaseInfo): void {
   selected.value = r
   selectedHtml.value = renderMarkdown(r.body ?? '*(此 release 没有说明文字)*')
+  void checkSaved(r.assets)
 }
 
 function openExternal(url: string): void {
@@ -85,13 +208,42 @@ onUnmounted(() => {
       </div>
 
       <div class="assets" v-if="selected.assets.length">
-        <div class="assets-title">附件（{{ selected.assets.length }}）</div>
-        <div class="asset-row" v-for="a in selected.assets" :key="a.id">
-          <button class="link-like asset-name" @click="openExternal(a.downloadUrl)" :title="a.downloadUrl">
-            ⬇ {{ a.name }}
+        <div class="assets-title">附件（{{ selected.assets.length }}）· 点击下载到「下载」文件夹</div>
+        <div class="asset-row" v-for="vm in assetVms" :key="vm.a.id">
+          <button
+            class="link-like asset-name"
+            @click="clickAsset(vm.a)"
+            :title="vm.st?.status === 'done' && vm.st.path ? vm.st.path : vm.a.downloadUrl"
+          >
+            {{ vm.st?.status === 'done' ? '📄' : '⬇' }} {{ vm.a.name }}
           </button>
-          <span class="asset-size">{{ fmtBytes(a.size) }}</span>
-          <span class="asset-count">{{ a.downloadCount }} 次下载</span>
+
+          <template v-if="vm.st?.status === 'downloading'">
+            <div class="dl-progress">
+              <div class="dl-bar">
+                <div class="dl-fill" :style="{ width: (vm.st.percent ?? 0) + '%' }"></div>
+              </div>
+              <span class="dl-info">
+                {{ vm.st.total > 0 ? vm.st.percent + '% · ' : '' }}{{ fmtBytes(vm.st.received) }}
+                <template v-if="vm.st.speed">· {{ fmtSpeed(vm.st.speed) }}</template>
+              </span>
+            </div>
+            <button class="mini-btn" @click="cancelAsset(vm.a)" title="取消下载">✕</button>
+          </template>
+
+          <template v-else-if="vm.st?.status === 'done'">
+            <span class="dl-done">✓ 已下载</span>
+            <button class="mini-btn" @click="openAsset(vm.st)">打开</button>
+            <button class="mini-btn" @click="deleteAsset(vm.a, vm.st)">删除</button>
+          </template>
+
+          <template v-else-if="vm.st?.status === 'error'">
+            <span class="dl-error" :title="vm.st.error">⚠ {{ vm.st.error }}</span>
+          </template>
+
+          <span class="asset-size">{{ fmtBytes(vm.a.size) }}</span>
+          <span class="asset-count">{{ vm.a.downloadCount }} 次下载</span>
+          <button class="mini-btn" @click="openExternal(vm.a.downloadUrl)" title="在浏览器中打开">↗</button>
         </div>
       </div>
 
@@ -159,6 +311,24 @@ onUnmounted(() => {
 .asset-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .asset-size { color: var(--fg-muted); font-size: 12px; }
 .asset-count { color: var(--fg-dim); font-size: 12px; }
+.dl-progress { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.dl-bar {
+  width: 110px; height: 4px; background: var(--border-soft);
+  border-radius: 2px; overflow: hidden;
+}
+.dl-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.2s ease; }
+.dl-info { font-size: 11px; color: var(--fg-muted); white-space: nowrap; }
+.dl-done { font-size: 11px; color: #3fb950; white-space: nowrap; }
+.dl-error {
+  font-size: 11px; color: #ffa198; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mini-btn {
+  font-size: 11px; padding: 2px 8px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--fg-muted); border-radius: 5px; cursor: pointer; white-space: nowrap;
+}
+.mini-btn:hover { border-color: var(--accent); color: var(--accent); }
 .rd-body { font-size: 13px; line-height: 1.65; }
 .empty.small { padding: 20px; font-size: 12px; }
 </style>

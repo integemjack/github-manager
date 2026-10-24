@@ -29,6 +29,7 @@ import {
   stopMcpHttp
 } from './mcp'
 import { checkForUpdates, downloadUpdate, installUpdate, startAutoUpdateCheck } from './update'
+import { registerDownloadIpc } from './download'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -128,6 +129,8 @@ function createWindow(): BrowserWindow {
 }
 
 // ---------------- IPC handlers ----------------
+
+registerDownloadIpc()
 
 function sendUpdate(win: BrowserWindow | null, payload: DeviceLoginUpdate): void {
   const w = win ?? BrowserWindow.getAllWindows().find((x) => !x.isDestroyed()) ?? null
