@@ -153,10 +153,20 @@ export function installUpdate(): void {
 export function startAutoUpdateCheck(): void {
   // Only auto-check in packaged builds; dev can still check manually
   if (process.env.ELECTRON_RENDERER_URL) return
-  setTimeout(() => {
+  // Notify each version at most once per session, so re-checks don't
+  // re-raise a banner the user already dismissed.
+  const notified = new Set<string>()
+  const check = () => {
     void (async () => {
       const info = await checkForUpdates()
-      if (info) send(null, 'update:available', info)
+      if (info && !notified.has(info.latest)) {
+        notified.add(info.latest)
+        send(null, 'update:available', info)
+      }
     })()
-  }, 3000)
+  }
+  setTimeout(check, 3000)
+  // Re-check periodically: an app that keeps running should discover newly
+  // published releases without needing a restart.
+  setInterval(check, 60 * 60 * 1000)
 }
