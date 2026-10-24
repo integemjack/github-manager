@@ -13,9 +13,11 @@ env:
   NODE_VERSION: '22'
 
 jobs:
-  # When pushing to main: if package.json version equals the version of the
-  # current rolling release but the commit differs, bump patch and push back,
-  # so every rolling build has a unique version number.
+  # When pushing to main: if package.json version equals the latest v* tag
+  # but the commit differs, bump patch and push back, so every build gets a
+  # unique version. Then always ensure tag v<version> exists at that commit —
+  # pushed with GITHUB_TOKEN, which does not trigger new workflow runs — and
+  # the publish job below turns it into a stable GitHub Release.
   bump-version:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -26,11 +28,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Decide version
+      - name: Decide version & tag
         id: result
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,14 +41,11 @@ jobs:
           set -euo pipefail
           VERSION="$(node -p 'require("./package.json").version')"
           HEAD_SHA="$(git rev-parse HEAD)"
-          LAST_VERSION=""
-          LAST_COMMIT=""
-          if gh release view rolling --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            LAST_VERSION="$(gh release view rolling --repo "$GITHUB_REPOSITORY" --json body -q .body | grep -oP 'version: \K[0-9.]+' | head -1 || true)"
-            LAST_COMMIT="$(gh release view rolling --repo "$GITHUB_REPOSITORY" --json body -q .body | grep -oP 'commit: \K[0-9a-f]+' | head -1 || true)"
-          fi
-          echo "current=$VERSION last=$LAST_VERSION last_commit=$LAST_COMMIT head=$HEAD_SHA"
-          if [ -n "$LAST_VERSION" ] && [ "$LAST_VERSION" = "$VERSION" ] && [ -n "$LAST_COMMIT" ] && [ "$LAST_COMMIT" != "$HEAD_SHA" ]; then
+          LAST_TAG="$(git tag -l 'v*' --sort=-v:refname | head -1 || true)"
+          LAST_VERSION="${LAST_TAG#v}"
+          echo "current=$VERSION last_tag=${LAST_TAG:-none} head=$HEAD_SHA"
+          if [ -n "$LAST_VERSION" ] && [ "$LAST_VERSION" = "$VERSION" ] && \
+             [ "$(git rev-parse -q --verify "refs/tags/$LAST_TAG" 2>/dev/null || true)" != "$HEAD_SHA" ]; then
             NEW_VERSION="$(node -p "const s='${VERSION}'.split('.').map(Number); s[2]++; s.join('.')")"
             npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
             git config user.name "github-actions[bot]"
@@ -54,6 +54,19 @@ jobs:
             git push
             VERSION="$NEW_VERSION"
             HEAD_SHA="$(git rev-parse HEAD)"
+          fi
+          # Always ensure the release tag exists at the exact commit we build.
+          # GITHUB_TOKEN pushes never trigger new workflow runs, so no loop.
+          TAG="v$VERSION"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            EXISTING="$(git rev-parse "$TAG^{commit}")"
+            if [ "$EXISTING" != "$HEAD_SHA" ]; then
+              echo "::error::tag $TAG already exists at $EXISTING, refusing to move it to $HEAD_SHA" >&2
+              exit 1
+            fi
+          else
+            git tag "$TAG" "$HEAD_SHA"
+            git push origin "$TAG"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
@@ -166,22 +179,14 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(cat dist/VERSION.txt | tr -d '[:space:]')"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG="$GITHUB_REF_NAME"
-            CHANNEL="stable"
-            NOTES="GitHub Manager $TAG"
-          else
-            TAG="rolling"
-            CHANNEL="rolling"
-            SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
-            NOTES="Rolling build v$VERSION ($SHA)"
-          fi
+          TAG="v$VERSION"
+          SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
           node tools/gen-last-json.mjs \
             --dir dist \
             --repo "$GITHUB_REPOSITORY" \
             --tag "$TAG" \
-            --channel "$CHANNEL" \
-            --notes "$NOTES"
+            --channel stable \
+            --notes "GitHub Manager $TAG (commit $SHA)"
 
       - name: Publish release
         env:
@@ -189,25 +194,12 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="$(cat dist/VERSION.txt | tr -d '[:space:]')"
-          echo "publishing version $VERSION"
+          TAG="v$VERSION"
+          SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
+          DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "publishing $TAG from $SHA"
           rm dist/VERSION.txt
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG="$GITHUB_REF_NAME"
-            gh release create "$TAG" dist/* \
-              --title "GitHub Manager $TAG" \
-              --notes "Release $TAG. See [README](https://github.com/${GITHUB_REPOSITORY}#readme) for MCP setup." \
-              --verify-tag
-          else
-            SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
-            DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
-            gh release delete rolling --yes --cleanup-tag 2>/dev/null || true
-            sleep 2
-            gh release create rolling dist/* \
-              --title "Rolling Build (main)" \
-              --prerelease \
-              --target "$SHA" \
-              --notes "Automated rolling build.
-          version: $VERSION
-          commit: $SHA
-          built: $DATE"
-          fi
+          gh release create "$TAG" dist/* \
+            --title "GitHub Manager $TAG" \
+            --notes "Release $TAG (commit $SHA, built $DATE). See [README](https://github.com/${GITHUB_REPOSITORY}#readme) for MCP setup." \
+            --verify-tag

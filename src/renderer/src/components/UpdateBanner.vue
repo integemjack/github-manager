@@ -57,7 +57,6 @@ onUnmounted(() => {
       <span class="up-icon">⬆</span>
       <span class="up-text">
         发现新版本 v{{ update.latest.latest }}
-        <span class="up-channel" v-if="update.latest.channel === 'rolling'">（预发布）</span>
       </span>
       <button class="primary up-btn" @click="download">下载更新</button>
       <button class="up-dismiss" title="本次忽略" @click="dismiss">✕</button>
@@ -98,7 +97,6 @@ onUnmounted(() => {
 .up-icon { color: var(--accent); }
 .up-icon.err { color: var(--warning); }
 .up-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.up-channel { color: var(--fg-dim); }
 .up-btn { padding: 3px 12px; font-size: 12px; flex-shrink: 0; }
 .up-progress { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .up-progress-bar {

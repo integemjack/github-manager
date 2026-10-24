@@ -59,10 +59,12 @@ npm run dist:all   # 全平台打包
 
 ## 发布
 
-- 推送到 `main` → GitHub Actions 自动构建 Windows / Linux / macOS 安装包并更新到 [Rolling Release](../../releases/tag/rolling)
-- 推送 `v*` 标签 → 发布正式 Release
-- 每个 Release 附带 `last.json`（自更新清单：版本号、各平台安装包地址与 sha512，由 `tools/gen-last-json.mjs` 生成）；应用启动时据此检查更新
-- 若本次推送忘记升版本号，CI 会自动 patch +1 并推回 main（版本号重复会干扰下游更新判断）
+- 推送到 `main` → GitHub Actions 自动：升版本号（若与最新 tag 重复则 patch +1）→ **自动打 `v*` 标签**（GITHUB_TOKEN 推送，不会触发循环）→ 构建三平台安装包 → 发布正式 Release（含 `last.json` 自更新清单）
+- 每次推 main 都会产出一个新的正式版本，`releases/latest` 始终指向最新构建
+- 若手动升了版本号（如 0.2.0）推送，则直接以该版本号打 tag 发布
+- 也可手动推 `v*` 标签重发某个版本（tag 必须指向 package.json 版本一致的提交，否则 CI 校验失败）
+- `last.json` 由 `tools/gen-last-json.mjs` 生成（版本号、各平台安装包地址与 sha512），应用启动时据此检查更新；版本号与打包产物在发布前有对齐校验，错位直接 fail
+- 版本 bump 逻辑的本地测试：`bash tools/test-bump.sh`（5 个 git 场景，不依赖网络）
 
 ## 安全说明
 

@@ -13,8 +13,9 @@ import type { UpdateInfo, UpdateManifest } from '../shared/types'
 // installer for the current platform, verify sha512, then relaunch it.
 
 const REPO = 'integemjack/github-manager'
-const STABLE_URL = `https://github.com/${REPO}/releases/latest/download/last.json`
-const ROLLING_URL = `https://github.com/${REPO}/releases/download/rolling/last.json`
+// Releases are tagged v* and always stable; `releases/latest` resolves to the
+// newest one, which ships last.json alongside the installers.
+const MANIFEST_URL = `https://github.com/${REPO}/releases/latest/download/last.json`
 const UA = 'github-manager-updater'
 
 function platformKey(): string {
@@ -56,12 +57,7 @@ let downloading = false
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
   const current = app.getVersion()
-  const [stable, rolling] = await Promise.all([fetchManifest(STABLE_URL), fetchManifest(ROLLING_URL)])
-
-  // Prefer the newest of stable / rolling so main-branch users get updates too.
-  let manifest: UpdateManifest | null = null
-  if (stable && rolling) manifest = versionGt(rolling.version, stable.version) ? rolling : stable
-  else manifest = stable ?? rolling
+  const manifest = await fetchManifest(MANIFEST_URL)
   if (!manifest) return null
   if (!versionGt(manifest.version, current)) return null
 
