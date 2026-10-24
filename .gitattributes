@@ -1,0 +1,11 @@
+# Force LF for shell scripts so they keep working after cross-platform checkouts
+*.sh text eol=lf
+tools/mock/gh text eol=lf
+*.cjs text eol=lf
+*.yml text eol=lf
+*.ts text eol=lf
+*.vue text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.md text eol=lf

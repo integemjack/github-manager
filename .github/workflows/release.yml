@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # When pushing to main: if package.json version equals the version of the
+  # current rolling release but the commit differs, bump patch and push back,
+  # so every rolling build has a unique version number.
+  bump-version:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.result.outputs.version }}
+      sha: ${{ steps.result.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Decide version
+        id: result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          LAST_VERSION=""
+          LAST_COMMIT=""
+          if gh release view rolling --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            LAST_VERSION="$(gh release view rolling --repo "$GITHUB_REPOSITORY" --json body -q .body | grep -oP 'version: \K[0-9.]+' | head -1 || true)"
+            LAST_COMMIT="$(gh release view rolling --repo "$GITHUB_REPOSITORY" --json body -q .body | grep -oP 'commit: \K[0-9a-f]+' | head -1 || true)"
+          fi
+          echo "current=$VERSION last=$LAST_VERSION last_commit=$LAST_COMMIT head=$HEAD_SHA"
+          if [ -n "$LAST_VERSION" ] && [ "$LAST_VERSION" = "$VERSION" ] && [ -n "$LAST_COMMIT" ] && [ "$LAST_COMMIT" != "$HEAD_SHA" ]; then
+            NEW_VERSION="$(node -p "const s='${VERSION}'.split('.').map(Number); s[2]++; s.join('.')")"
+            npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "chore: bump version to ${NEW_VERSION} [skip ci]"
+            git push
+            VERSION="$NEW_VERSION"
+            HEAD_SHA="$(git rev-parse HEAD)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [bump-version]
+    if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            targets: '--win'
+          - os: ubuntu-latest
+            targets: '--linux'
+          - os: macos-latest
+            targets: '--mac'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-fund --no-audit
+
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Build & package
+        run: npx electron-vite build && npx electron-builder ${{ matrix.targets }} --publish never
+        env:
+          # keep unsigned mac build from failing
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p stage
+          cp dist-electron/*.exe dist-electron/*.zip stage/ 2>/dev/null || true
+          cp dist-electron/*.dmg stage/ 2>/dev/null || true
+          cp dist-electron/*.AppImage dist-electron/*.deb stage/ 2>/dev/null || true
+          cp dist-electron/latest*.yml stage/ 2>/dev/null || true
+          echo "$(node -p 'require("./package.json").version')" > stage/VERSION.txt
+          ls -la stage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gm-${{ matrix.os }}
+          path: stage/*
+          if-no-files-found: error
+
+  publish:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(cat dist/VERSION.txt | tr -d '[:space:]')"
+          echo "publishing version $VERSION"
+          rm dist/VERSION.txt
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+            gh release create "$TAG" dist/* \
+              --title "GitHub Manager $TAG" \
+              --notes "Release $TAG. See [README](https://github.com/${GITHUB_REPOSITORY}#readme) for MCP setup." \
+              --verify-tag
+          else
+            SHA="${{ needs.bump-version.outputs.sha || github.sha }}"
+            DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
+            gh release delete rolling --yes --cleanup-tag 2>/dev/null || true
+            sleep 2
+            gh release create rolling dist/* \
+              --title "Rolling Build (main)" \
+              --prerelease \
+              --target "$SHA" \
+              --notes "Automated rolling build.
+          version: $VERSION
+          commit: $SHA
+          built: $DATE"
+          fi

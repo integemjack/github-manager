@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Mock gh CLI: controlled by env vars MOCK_ROLLING_EXISTS / MOCK_ROLLING_BODY
+cmd="$1 $2 $3" # e.g. "release view rolling"
+case "$cmd" in
+  "release view rolling")
+    if [ "${MOCK_ROLLING_EXISTS:-0}" = "1" ]; then
+      if [[ "$*" == *"--json body"* ]]; then
+        printf '%s\n' "$MOCK_ROLLING_BODY"
+      fi
+      exit 0
+    fi
+    exit 1
+    ;;
+  *)
+    echo "mock gh: unhandled: $*" >&2
+    exit 1
+    ;;
+esac
