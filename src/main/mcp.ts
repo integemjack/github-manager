@@ -42,7 +42,7 @@ export function mcpTools(): ToolDef[] {
     {
       name: 'github_list_repos',
       description:
-        '列出所有已登录账号可见的仓库，按最后推送时间从新到旧排序，并带每个仓库最近一次 GitHub Actions 运行的状态。可用 query 按名称过滤。',
+        '列出所有已登录账号可见的仓库：最近一次 GitHub Actions 正在运行/排队中的仓库排在最前，其余按最后推送时间从新到旧排序，并带每个仓库最近一次 Actions 运行的状态。可用 query 按名称过滤。',
       inputSchema: {
         type: 'object',
         properties: {
@@ -219,7 +219,7 @@ async function callTool(name: string, args: any): Promise<string> {
           (r) => r.fullName.toLowerCase().includes(q) || (r.description ?? '').toLowerCase().includes(q)
         )
       }
-      return `共 ${repos.length} 个仓库（按最后推送时间排序，显示前 ${limit} 个）：\n` + renderRepos(repos.slice(0, limit))
+      return `共 ${repos.length} 个仓库（Actions 进行中的在前，其余按最后推送时间排序，显示前 ${limit} 个）：\n` + renderRepos(repos.slice(0, limit))
     }
 
     case 'github_list_workflow_runs': {

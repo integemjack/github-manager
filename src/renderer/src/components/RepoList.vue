@@ -62,7 +62,7 @@ function openRepoUrl(url: string, e: Event): void {
     <div class="toolbar">
       <h2 class="page-title">
         {{ accountFilter ? `${accountFilter} 的仓库` : '全部仓库' }}
-        <span class="page-count" v-if="!loadingRepos">（{{ filtered.length }}，按最后更新排序）</span>
+        <span class="page-count" v-if="!loadingRepos">（{{ filtered.length }}，Actions 进行中的在前，其余按最后更新排序）</span>
       </h2>
       <div class="toolbar-actions">
         <label class="private-toggle">

@@ -231,8 +231,16 @@ export async function listAllRepos(force = false): Promise<Repo[]> {
       (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
     )
     await attachActionsStatus(repos)
-    repoCache = { at: Date.now(), repos }
-    return repos
+    // 最近一次 Actions 还在跑（运行中/排队中）的仓库排到最前，其余保持最后推送顺序。
+    // sort 是稳定排序，二次排序不会打乱组内顺序。
+    const isWorking = (r: Repo) => !!r.lastRun && r.lastRun.status !== 'completed'
+    const sorted = [...repos].sort(
+      (a, b) =>
+        Number(isWorking(b)) - Number(isWorking(a)) ||
+        Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    )
+    repoCache = { at: Date.now(), repos: sorted }
+    return sorted
   })()
 
   repoCache = { at: Date.now(), repos: [], inflight: job }
