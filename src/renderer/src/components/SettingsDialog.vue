@@ -119,6 +119,7 @@ const importSummary = ref<ConfigImportSummary | null>(null)
 const importPassword = ref('')
 const importAccounts = ref(true)
 const importSettings = ref(true)
+const replaceAccounts = ref(false)
 const importBusy = ref(false)
 const importError = ref<string | null>(null)
 const importResult = ref<ConfigImportResult | null>(null)
@@ -145,6 +146,7 @@ async function openImport(): Promise<void> {
     importSummary.value = summary
     importAccounts.value = summary.accounts.length > 0
     importSettings.value = true
+    replaceAccounts.value = false
   } catch (err) {
     importError.value = errMessage(err)
   }
@@ -155,6 +157,7 @@ function cancelImport(): void {
   importResult.value = null
   importError.value = null
   importPassword.value = ''
+  replaceAccounts.value = false
 }
 
 async function doImport(): Promise<void> {
@@ -168,7 +171,8 @@ async function doImport(): Promise<void> {
       path: summary.path,
       password: summary.hasSecrets ? importPassword.value : undefined,
       importAccounts: importAccounts.value,
-      importSettings: importSettings.value
+      importSettings: importSettings.value,
+      replaceAccounts: importAccounts.value && replaceAccounts.value
     })
     if (res.uiPrefs) {
       for (const [key, value] of Object.entries(res.uiPrefs)) localStorage.setItem(key, value)
@@ -251,7 +255,7 @@ function reveal(path: string | undefined): void {
 
       <div class="section-title">配置备份与迁移</div>
       <div class="cfg-desc">
-        把设置、账号列表和界面偏好导出成一个 JSON 文件，换机或重装后导入即可恢复。合并导入，不会删除本机已有账号。
+        把设置、账号列表和界面偏好导出成一个 JSON 文件，换机或重装后导入即可恢复。默认合并导入，不会删除本机已有账号；需要完全恢复成文件里的样子时可勾选「替换本机账号」。
       </div>
       <div class="cfg-actions">
         <button @click="openExport">导出配置…</button>
@@ -323,6 +327,17 @@ function reveal(path: string | undefined): void {
           <span>导入偏好设置（MCP 服务：{{ importSummary.mcpEnabled ? '启用' : '停用' }}）</span>
         </label>
 
+        <label class="check" v-if="importSummary.accounts.length > 0">
+          <input type="checkbox" v-model="replaceAccounts" :disabled="!importAccounts" />
+          <span>
+            替换本机账号
+            <span class="muted">（删除文件里没有的账号，本机现有 {{ importSummary.localAccounts }} 个）</span>
+          </span>
+        </label>
+        <div class="warn" v-if="importAccounts && replaceAccounts">
+          · 导入后本机只保留文件里能恢复的账号，其余会被删除；文件里 Token 校验失败的账号会保留不动。
+        </div>
+
         <template v-if="importSummary.hasSecrets && importAccounts">
           <div class="field-label">文件密码</div>
           <input
@@ -338,6 +353,7 @@ function reveal(path: string | undefined): void {
           <div>
             ✓ 导入完成：新增 {{ importResult.added }}，更新 {{ importResult.updated }}
             <template v-if="importResult.skipped">，跳过 {{ importResult.skipped }}</template>
+            <template v-if="importResult.removed">，删除本机 {{ importResult.removed }} 个账号</template>
           </div>
           <div v-if="importResult.settingsApplied">
             · 已应用偏好设置：MCP {{ importResult.mcpEnabled ? '启用' : '停用' }}
@@ -356,7 +372,7 @@ function reveal(path: string | undefined): void {
             "
             @click="doImport"
           >
-            {{ importBusy ? '导入中…' : '开始导入' }}
+            {{ importBusy ? '导入中…' : replaceAccounts && importAccounts ? '覆盖导入' : '开始导入' }}
           </button>
         </div>
       </div>
@@ -462,6 +478,7 @@ function reveal(path: string | undefined): void {
   cursor: pointer;
 }
 .check input { accent-color: var(--accent); }
+.check .muted { color: var(--fg-dim); }
 .hint { font-size: 12px; color: var(--fg-dim); line-height: 1.6; }
 .cfg-panel .hint { margin-top: 2px; }
 .err { color: #ffa198; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }

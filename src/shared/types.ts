@@ -207,6 +207,8 @@ export interface ConfigImportSummary {
   exportedAt: string
   appVersion: string
   accounts: { login: string; name: string | null; type: string }[]
+  /** Accounts currently stored on this machine (for the replace-mode warning). */
+  localAccounts: number
   hasSecrets: boolean
   mcpEnabled: boolean
   uiPrefs: number
@@ -217,12 +219,15 @@ export interface ConfigImportOptions {
   password?: string
   importAccounts: boolean
   importSettings: boolean
+  /** Replace instead of merge: drop local accounts that the file cannot restore. */
+  replaceAccounts?: boolean
 }
 
 export interface ConfigImportResult {
   added: number
   updated: number
   skipped: number
+  removed: number
   warnings: string[]
   settingsApplied: boolean
   mcpEnabled: boolean

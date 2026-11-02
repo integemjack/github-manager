@@ -19,6 +19,7 @@ import {
   getAccounts,
   getMcpEnabled,
   getStoredAccounts,
+  removeAccount,
   setMcpEnabled,
   upsertAccount
 } from './store'
@@ -193,6 +194,7 @@ function summarize(file: ConfigFile, filePath: string): ConfigImportSummary {
     exportedAt: file.exportedAt,
     appVersion: file.appVersion,
     accounts: file.accounts.map((a) => ({ login: a.login, name: a.name, type: a.type })),
+    localAccounts: getAccounts().length,
     hasSecrets: !!file.secrets,
     mcpEnabled: file.settings.mcpEnabled,
     uiPrefs: file.ui ? Object.keys(file.ui).length : 0
@@ -282,6 +284,10 @@ export async function applyConfigFile(
   let added = 0
   let updated = 0
   let skipped = 0
+  let removed = 0
+  // Logins that ended up stored locally with a usable token — everything else
+  // is left alone by replace mode, so a broken token never costs an account.
+  const restored = new Set<string>()
 
   if (opts.importAccounts) {
     if (file.accounts.length === 0) warnings.push('配置文件中没有账号')
@@ -299,6 +305,7 @@ export async function applyConfigFile(
         if (known.has(account.login)) updated++
         else added++
         known.add(account.login)
+        restored.add(account.login)
       } catch (err) {
         const authFailure = err instanceof GitHubError && (err.status === 401 || err.status === 403)
         if (authFailure) {
@@ -312,6 +319,7 @@ export async function applyConfigFile(
           if (known.has(acc.login)) updated++
           else added++
           known.add(acc.login)
+          restored.add(acc.login)
           warnings.push(`${acc.login}：无法在线校验（${errMessage(err)}），已按文件信息导入`)
         } catch (inner) {
           skipped++
@@ -319,7 +327,28 @@ export async function applyConfigFile(
         }
       }
     }
-    if (added + updated > 0) invalidateRepoCache()
+
+    if (opts.replaceAccounts) {
+      if (restored.size === 0) {
+        warnings.push('没有成功导入任何账号，已忽略「替换本机账号」，本机账号未删除')
+      } else {
+        // Keep every account the file knows about, even when its token could not
+        // be verified — a revoked token must not cost the user the account entry.
+        const keep = new Set(restored)
+        for (const acc of file.accounts) keep.add(acc.login)
+        for (const local of getAccounts()) {
+          if (keep.has(local.login)) continue
+          removeAccount(local.login)
+          removed++
+        }
+        if (removed > 0) {
+          warnings.push(`已删除本机其他 ${removed} 个账号（替换导入）`)
+        }
+      }
+    }
+    if (added + updated > 0 || removed > 0) invalidateRepoCache()
+  } else if (opts.replaceAccounts) {
+    warnings.push('「替换本机账号」需要同时勾选「导入账号」，已忽略')
   }
 
   const settingsApplied = opts.importSettings ? await applyMcpSetting(file.settings.mcpEnabled, warnings) : false
@@ -328,6 +357,7 @@ export async function applyConfigFile(
     added,
     updated,
     skipped,
+    removed,
     warnings,
     settingsApplied,
     mcpEnabled: getMcpEnabled(),
