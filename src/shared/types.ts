@@ -147,6 +147,88 @@ export interface DeviceLoginUpdate {
   message?: string
 }
 
+// --- config export / import (settings + accounts, optional password-protected tokens) ---
+
+export interface ConfigAccount {
+  id: string
+  login: string
+  name: string | null
+  avatarUrl: string
+  htmlUrl: string
+  type: string
+  scopes: string[]
+  addedAt: string
+}
+
+/** AES-256-GCM blob holding the account tokens (key derived from the password). */
+export interface ConfigSecrets {
+  alg: 'aes-256-gcm'
+  kdf: string // e.g. scrypt-N16384-r8-p1
+  salt: string // base64
+  iv: string // base64
+  tag: string // base64 auth tag
+  data: string // base64 ciphertext of { tokens: Record<login, token> }
+}
+
+/** On-disk config file (github-manager-config-*.json). */
+export interface ConfigFile {
+  format: 'github-manager-config'
+  version: number
+  exportedAt: string
+  appVersion: string
+  settings: { mcpEnabled: boolean }
+  accounts: ConfigAccount[]
+  ui?: Record<string, string> // UI preferences from localStorage (see shared/prefs.ts)
+  secrets?: ConfigSecrets // present only when tokens were included
+}
+
+export interface ConfigExportOptions {
+  includeTokens: boolean
+  password?: string
+  uiPrefs?: Record<string, string>
+  /** Explicit target path; when omitted the save dialog is shown (tests use this). */
+  path?: string
+}
+
+export interface ConfigExportResult {
+  cancelled: boolean
+  path?: string
+  accounts: number
+  accountsWithTokens: number
+  includesSecrets: boolean
+  uiPrefs: number
+  warnings: string[]
+}
+
+/** What the renderer shows after the user picked a config file. */
+export interface ConfigImportSummary {
+  path: string
+  fileName: string
+  exportedAt: string
+  appVersion: string
+  accounts: { login: string; name: string | null; type: string }[]
+  hasSecrets: boolean
+  mcpEnabled: boolean
+  uiPrefs: number
+}
+
+export interface ConfigImportOptions {
+  path: string
+  password?: string
+  importAccounts: boolean
+  importSettings: boolean
+}
+
+export interface ConfigImportResult {
+  added: number
+  updated: number
+  skipped: number
+  warnings: string[]
+  settingsApplied: boolean
+  mcpEnabled: boolean
+  uiPrefs: Record<string, string> | undefined
+}
+
 // --- app self-update (last.json published alongside each GitHub release) ---
 
 export interface UpdateAsset {

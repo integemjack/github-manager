@@ -12,6 +12,7 @@
 - **Actions 构建详情** —— 点开仓库查看运行历史；每次运行的 job、每个 step 的实时进度（8 秒轮询）、运行日志（末尾 200 KB）
 - **Release 管理** —— 查看 Release 列表（Latest / 预发布 / 草稿标记）、说明（Markdown 渲染）；附件点击即在应用内下载（实时进度与速度、可取消），保存到系统「下载」文件夹，已下载的可直接打开或删除（删除进回收站）
 - **MCP 服务器** —— 内置 Model Context Protocol 服务（Streamable HTTP + stdio 桥接），AI 助手可查询你的账号、仓库、Actions 与 Release
+- **配置导入导出** —— 设置页把账号列表、MCP 开关与界面偏好导出成 JSON，换机或重装后一键导入恢复；可选带上账号 Token（用自定义密码 AES-256-GCM 加密，导入时输入同一密码即可免登录）
 - **自动更新** —— 启动时检查新版本（含 Rolling 预发布），顶部提示条内下载、校验 sha512 并一键重启安装（Windows）；其他平台跳转下载页
 
 ## MCP
@@ -44,6 +45,32 @@ stdio 客户端（Claude Desktop 等）使用仓库自带桥接脚本（需先�
 | `github_get_release_by_tag` | 按标签取 Release 详情 |
 
 MCP 为只读设计，不会触发任何写操作。
+
+## 配置导入导出
+
+设置 → 「配置备份与迁移」里可以把当前配置导出成 JSON，或从 JSON 恢复。
+
+- 导出内容：账号列表、MCP 服务开关、界面偏好（列表列宽）；可选带上账号 Token
+- Token 是敏感信息，勾选「包含账号 Token」时必须设一个至少 6 位的密码，文件里的 Token 用 AES-256-GCM 加密（scrypt 派生密钥，随机 salt/iv），换密码或改动文件都会解密失败
+- 不勾选 Token 时文件里没有任何凭据，导入后需要重新登录账号
+- 导入是**合并**：按登录名匹配，已有账号更新、没有的新增，跳过文件里没有 Token 的账号，不会删除本机已有账号
+- 导出的账号 Token 会先向 GitHub 校验（`/user`）；返回 401/403 视为已失效并跳过，网络异常时按文件信息照样导入，并在结果里提示
+- 文件格式（`format: github-manager-config`, `version: 1`）：
+
+```json
+{
+  "format": "github-manager-config",
+  "version": 1,
+  "exportedAt": "2026-11-02T08:00:00.000Z",
+  "appVersion": "0.1.10",
+  "settings": { "mcpEnabled": true },
+  "accounts": [{ "id": "octocat", "login": "octocat", "name": null, "avatarUrl": "…", "htmlUrl": "…", "type": "User", "scopes": ["repo"], "addedAt": "…" }],
+  "ui": { "gm.relColWidth": "420", "gm.runsColWidth": "400" },
+  "secrets": { "alg": "aes-256-gcm", "kdf": "scrypt-N16384-r8-p1", "salt": "…", "iv": "…", "tag": "…", "data": "…" }
+}
+```
+
+`secrets.data` 解密后是 `{ "tokens": { "octocat": "ghp_…" } }`；没有 Token 时整个 `secrets` 字段不会出现。
 
 ## 开发
 

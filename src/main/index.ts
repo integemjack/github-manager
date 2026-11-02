@@ -30,8 +30,17 @@ import {
 } from './mcp'
 import { checkForUpdates, downloadUpdate, installUpdate, startAutoUpdateCheck } from './update'
 import { registerDownloadIpc } from './download'
+import { registerConfigIpc } from './config'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// --- dev-only hooks (used by the e2e verification scripts) ---
+if (process.env.GM_USER_DATA_DIR) {
+  app.setPath('userData', process.env.GM_USER_DATA_DIR)
+}
+if (process.env.GM_DEBUG_PORT) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.GM_DEBUG_PORT)
+}
 
 // --- stdio MCP mode: run headless MCP server, no window ---
 if (process.argv.includes('--mcp')) {
@@ -131,6 +140,7 @@ function createWindow(): BrowserWindow {
 // ---------------- IPC handlers ----------------
 
 registerDownloadIpc()
+registerConfigIpc()
 
 function sendUpdate(win: BrowserWindow | null, payload: DeviceLoginUpdate): void {
   const w = win ?? BrowserWindow.getAllWindows().find((x) => !x.isDestroyed()) ?? null

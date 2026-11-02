@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Account } from '../shared/types'
 
-interface StoredAccount extends Account {
+export interface StoredAccount extends Account {
   tokenEncrypted: string // base64(safeStorage.encrypt(token))
 }
 
@@ -56,6 +56,11 @@ export async function decryptToken(encrypted: string): Promise<string> {
 export function getAccounts(): Account[] {
   // No token decryption needed here — just strip the encrypted blob
   return readStore().accounts.map(({ tokenEncrypted: _t, ...rest }) => rest)
+}
+
+/** Accounts including the encrypted token blob — only for config export. */
+export function getStoredAccounts(): StoredAccount[] {
+  return readStore().accounts
 }
 
 export async function getTokenFor(login: string): Promise<string | null> {

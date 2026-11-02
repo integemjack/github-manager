@@ -5,6 +5,11 @@ import type {
   AssetDownloadError,
   AssetDownloadProgress,
   AssetDownloadRequest,
+  ConfigExportOptions,
+  ConfigExportResult,
+  ConfigImportOptions,
+  ConfigImportResult,
+  ConfigImportSummary,
   DeviceLoginUpdate,
   McpStatus,
   ReleaseInfo,
@@ -65,6 +70,14 @@ const api = {
     ipcRenderer.on('asset:error', listener)
     return () => ipcRenderer.removeListener('asset:error', listener)
   },
+
+  // config backup (export / import)
+  exportConfig: (opts: ConfigExportOptions): Promise<ConfigExportResult> =>
+    ipcRenderer.invoke('config:export', opts),
+  pickImportConfig: (): Promise<ConfigImportSummary | null> => ipcRenderer.invoke('config:pickImport'),
+  importConfig: (opts: ConfigImportOptions): Promise<ConfigImportResult> =>
+    ipcRenderer.invoke('config:import', opts),
+  revealConfigFile: (path: string): Promise<void> => ipcRenderer.invoke('config:reveal', path),
 
   // mcp
   mcpStatus: (): Promise<McpStatus> => ipcRenderer.invoke('mcp:status'),
